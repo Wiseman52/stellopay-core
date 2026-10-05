@@ -8,7 +8,7 @@ use super::is_emergency_paused;
 use crate::events::{BatchMilestoneClaimedEvent, MilestoneClaimed};
 use crate::storage::{
     AgreementStatus, BatchMilestoneResult, Milestone, MilestoneClaimResult, MilestoneKey,
-    PayrollError, MAX_BATCH_SIZE,
+    PayrollError, PaymentType, MAX_BATCH_SIZE,
 };
 use soroban_sdk::{token::Client as TokenClient, Address, Env, Vec};
 
@@ -77,6 +77,19 @@ pub fn claim_milestone(
     // Check emergency pause
     if is_emergency_paused(&env) {
         return Err(PayrollError::EmergencyPaused);
+    }
+
+    // Enforce the agreement-kind boundary: `claim_milestone` is only valid for
+    // milestone agreements. Milestone agreements are marked on-chain by
+    // `MilestoneKey::PaymentType(..) == PaymentType::MilestoneBased`; a payroll
+    // or escrow `agreement_id` must be rejected before any milestone storage is
+    // read, otherwise the call would operate on the wrong namespace.
+    let payment_type: Option<PaymentType> = env
+        .storage()
+        .persistent()
+        .get(&MilestoneKey::PaymentType(agreement_id));
+    if payment_type != Some(PaymentType::MilestoneBased) {
+        return Err(PayrollError::InvalidAgreementMode);
     }
 
     let contributor: Address = env

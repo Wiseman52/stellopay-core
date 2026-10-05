@@ -226,15 +226,17 @@ fn insufficient_payroll_escrow_rejects_without_state_change() {
 /// claim_milestone would silently operate on the wrong storage keys.
 /// The kind check must fire at the boundary, before any milestone logic runs.
 #[test]
-#[should_panic]
 fn test_claim_milestone_rejects_payroll_agreement() {
     let (env, client, employer, _employee, _other, token) = setup();
     env.mock_all_auths();
 
-    // Create a payroll agreement (mode = Payroll, not Milestone)
+    // Create a payroll agreement (`mode = Payroll`, not milestone-based).
     let payroll_id = client.create_payroll_agreement(&employer, &token, &(86_400u64 * 7));
 
-    // Attempting to claim a milestone against a payroll agreement_id must
-    // be rejected with InvalidAgreementMode (panics in the test harness).
-    let _ = client.claim_milestone(&payroll_id, &1u32);
+    // Attempting to claim a milestone against a payroll agreement_id must be
+    // rejected at the kind boundary with InvalidAgreementMode.
+    assert_eq!(
+        client.try_claim_milestone(&payroll_id, &1u32),
+        Err(Ok(PayrollError::InvalidAgreementMode))
+    );
 }
